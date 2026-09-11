@@ -603,7 +603,10 @@
         <button class="flow-back" onclick="goTo('home')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>
         <h1 style="font-size:21px;">Book a session</h1>
       </div>
-      <button class="btn btn-secondary btn-block" style="margin-bottom:16px;" onclick="openChatAssistant('booking')">💬 Prefer to just chat? Talk it through with us</button>
+      <button class="btn btn-primary btn-block" style="margin-bottom:16px;" onclick="openChatAssistant('booking')">💬 Chat with us</button>
+      <a href="#" id="book-manual-toggle" style="display:block;font-size:13px;color:var(--primary);margin-bottom:16px;" onclick="revealManualBooking(); return false;">Book manually instead</a>
+
+      <div id="book-manual-wrap" style="display:none;">
       <div class="flow-steps">
         <div class="flow-step" id="fstep-1"></div><div class="flow-step" id="fstep-2"></div>
         <div class="flow-step" id="fstep-3"></div><div class="flow-step" id="fstep-4"></div>
@@ -758,6 +761,7 @@
       <div style="display:flex;gap:10px;margin-top:28px;">
         <button class="btn btn-secondary" id="book-back-btn" style="display:none;" onclick="bookStepBack()">Back</button>
         <button class="btn btn-primary btn-block" id="book-next-btn" onclick="bookStepNext()" disabled>Continue</button>
+      </div>
       </div>
     </section>
 
@@ -1002,7 +1006,6 @@
         <button class="flow-back" onclick="closeChatAssistant()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>
         <h1 style="font-size:21px;" id="chat-assistant-title">Let's find you a time</h1>
       </div>
-      <button class="btn btn-secondary btn-sm" id="chat-assistant-manual-link" style="margin-bottom:12px;" onclick="closeChatAssistant()">📅 Browse the calendar instead</button>
       <div id="chat-assistant-transcript" style="display:flex;flex-direction:column;gap:10px;padding:4px 0 16px;min-height:200px;"></div>
       <div id="chat-assistant-quick-replies" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;"></div>
       <a href="#" id="chat-assistant-type-toggle" style="display:none;font-size:13px;color:var(--primary);margin-bottom:12px;" onclick="showChatAssistantInput(); return false;">✏️ or type something else</a>
@@ -2217,6 +2220,7 @@ async function startReschedule(sessionId) {
     const s = realSessions.find(x => x.id === sessionId);
     if (!s) return;
     goTo('book'); // note: goTo('book') only resets on first-ever visit — set the real reschedule state after
+    revealManualBooking();
     bookingState = {
       step: 3,
       service: { id: null, name: s.service, price: null, durationMinutes: s.durationMinutes, deliveryMode: s.locationType === 'online' ? 'online' : 'in-person' },
@@ -2234,6 +2238,7 @@ async function startReschedule(sessionId) {
   const practitioner = PRACTITIONERS.find(x => x.name === s.practitioner);
   if (!service || !practitioner) return;
   goTo('book'); // note: goTo('book') resets bookingState internally — set the real state after
+  revealManualBooking();
   bookingState = {
     step: 3, service, practitioner, date: null, time: null, groupClassId: null,
     isReschedule: true, rescheduleSessionId: sessionId,
@@ -2358,6 +2363,16 @@ let chatAssistantMessages = [];
 // signed-in state (already managed elsewhere) controls which of these
 // two containers is in play. Safe to just reveal both; the one that
 // doesn't apply stays invisible regardless, same as it always was.
+// Reveals the manual step-by-step booking flow — needed both when the
+// person explicitly asks for it, AND whenever the chat hands off a
+// confirmed booking to this screen, since renderBookStep() would
+// otherwise be filling in a confirm screen that's sitting invisible
+// behind display:none.
+function revealManualBooking() {
+  document.getElementById('book-manual-wrap').style.display = 'block';
+  document.getElementById('book-manual-toggle').style.display = 'none';
+}
+
 function revealManualGiftCardPurchase() {
   document.getElementById('giftcard-guest-manual-wrap').style.display = 'block';
   document.getElementById('giftcard-signedin-buy-wrap').style.display = 'block';
@@ -2369,16 +2384,6 @@ async function openChatAssistant(mode) {
   chatAssistantMessages = [];
   const titles = { gift_card: 'Let\'s get you a gift card', package: 'Let\'s find you a package', booking: 'Let\'s find you a time', home: 'How can we help?' };
   document.getElementById('chat-assistant-title').textContent = titles[mode] || 'Let\'s chat';
-  const manualLinkLabels = { gift_card: '📋 Buy manually instead', package: '📋 See packages manually', booking: '📅 Browse the calendar instead' };
-  const manualLinkEl = document.getElementById('chat-assistant-manual-link');
-  if (manualLinkLabels[mode]) {
-    manualLinkEl.textContent = manualLinkLabels[mode];
-    manualLinkEl.style.display = 'inline-block';
-  } else {
-    // 'home' mode has no single manual alternative to offer — it's the
-    // general concierge, not a stand-in for one specific manual screen.
-    manualLinkEl.style.display = 'none';
-  }
   document.getElementById('chat-assistant-transcript').innerHTML = '';
   document.getElementById('chat-assistant-quick-replies').innerHTML = '';
   document.getElementById('chat-assistant-error').classList.remove('show');
@@ -2392,6 +2397,11 @@ async function openChatAssistant(mode) {
 function closeChatAssistant() {
   const destinations = { gift_card: 'giftcards', package: 'packages', booking: 'book', home: 'home' };
   goTo(destinations[chatAssistantMode] || 'home');
+  // Without this, leaving the chat landed on a page that looked mostly
+  // empty — the manual section is hidden by default, and just
+  // navigating there doesn't reveal it on its own.
+  if (chatAssistantMode === 'booking') revealManualBooking();
+  else if (chatAssistantMode === 'gift_card') revealManualGiftCardPurchase();
 }
 
 function appendChatBubble(role, text) {
@@ -2501,6 +2511,7 @@ async function handleChatAssistantFinalResult(finalResult) {
     if (!bookingState.service) {
       appendChatBubble('assistant', "Hmm, I couldn't line that service up correctly on the booking screen — let's finish this on the booking page directly.");
       goTo('book');
+      revealManualBooking();
       return;
     }
     await selectPractitioner(practitionerId);
@@ -2508,6 +2519,7 @@ async function handleChatAssistantFinalResult(finalResult) {
     bookingState.time = time;
     bookingState.step = getBookSteps().length; // the "confirm" step, whatever index it lands at for this service type
     goTo('book');
+    revealManualBooking();
     await renderBookStep();
     // renderBookStep() already shows the guest contact fields for a
     // signed-out visitor at the confirm step — this just fills in what
