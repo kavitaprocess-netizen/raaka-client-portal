@@ -645,6 +645,7 @@
       <div id="book-step-confirm" style="display:none;">
         <h2 class="section-title">Confirm your booking</h2>
         <div class="summary-card" id="booking-summary"></div>
+        <a href="#" id="change-service-time-link" style="display:none;font-size:12.5px;color:var(--primary);margin-top:-6px;margin-bottom:14px;" onclick="changeServiceOrTime(); return false;">Change service or time</a>
         <div class="giftcard-error" id="reschedule-error"></div>
         <div class="card-on-file-box" id="card-on-file-box"></div>
         <div id="guest-booking-section" style="display:none;">
@@ -2458,6 +2459,15 @@ let chatAssistantMessages = [];
 // confirmed booking to this screen, since renderBookStep() would
 // otherwise be filling in a confirm screen that's sitting invisible
 // behind display:none.
+// Jumps back to service selection (step 1) rather than just "Back"
+// one step at a time — changing the service cascades into needing a
+// new practitioner and time anyway, so there's nothing worth
+// preserving from the later steps once this is clicked.
+async function changeServiceOrTime() {
+  bookingState.step = 1;
+  await renderBookStep();
+}
+
 function revealManualBooking() {
   document.getElementById('book-manual-wrap').style.display = 'block';
   document.getElementById('book-manual-toggle').style.display = 'none';
@@ -2476,6 +2486,8 @@ function revealManualBooking() {
   const realPaymentQuick = document.getElementById('real-payment-quick-confirm');
   if (realPaymentFull) realPaymentFull.style.display = 'block';
   if (realPaymentQuick) realPaymentQuick.style.display = 'none';
+  const changeServiceLink = document.getElementById('change-service-time-link');
+  if (changeServiceLink) changeServiceLink.style.display = 'none';
 }
 
 function revealManualGiftCardPurchase() {
@@ -2695,6 +2707,7 @@ async function handleChatAssistantFinalResult(finalResult) {
     goTo('book');
     revealManualBooking();
     await renderBookStep();
+    document.getElementById('change-service-time-link').style.display = 'block';
     // renderBookStep() already shows the guest contact fields for a
     // signed-out visitor at the confirm step — this just fills in what
     // the conversation already collected, same real fields the manual
@@ -2731,7 +2744,16 @@ async function handleChatAssistantFinalResult(finalResult) {
       }
 
       if (guestName && guestEmail) {
-        document.getElementById('guest-identity-summary-line').textContent = `Booking as ${guestName} (${guestEmail})`;
+        const summaryLineEl = document.getElementById('guest-identity-summary-line');
+        summaryLineEl.innerHTML = '';
+        const nameRow = document.createElement('div');
+        const nameLabel = document.createElement('strong'); nameLabel.textContent = 'Name: ';
+        nameRow.appendChild(nameLabel); nameRow.appendChild(document.createTextNode(guestName));
+        const emailRow = document.createElement('div');
+        const emailLabel = document.createElement('strong'); emailLabel.textContent = 'Email: ';
+        emailRow.appendChild(emailLabel); emailRow.appendChild(document.createTextNode(guestEmail));
+        summaryLineEl.appendChild(nameRow);
+        summaryLineEl.appendChild(emailRow);
         document.getElementById('guest-form-fields').style.display = 'none';
         if (paymentResolvedOk) {
           // Both identity and payment resolved cleanly — collapse both
