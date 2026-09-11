@@ -533,7 +533,7 @@
         <p id="home-hero-sub" style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">Tell us what you're looking for — a session, a gift card, or just figuring out where to start.</p>
         <div style="display:flex;gap:8px;">
           <input type="text" class="form-input" id="home-hero-input" placeholder="e.g. My shoulders have been really tight lately..." style="flex:1;" onkeydown="if(event.key==='Enter'){startHomeConcierge();}">
-          <button type="button" class="btn btn-secondary" onclick="startHomeConcierge(true)" title="Speak instead">🎤</button>
+          <button type="button" class="btn btn-secondary" onclick="startHomeConcierge(true)" title="Speak instead">🎤 Speak</button>
           <button class="btn btn-primary" onclick="startHomeConcierge()">Send</button>
         </div>
       </div>
@@ -943,6 +943,24 @@
         <div class="giftcard-panel-title">Buy a gift card</div>
         <p class="giftcard-note" style="margin-top:-6px;">Purchase instantly — no account required.</p>
         <div id="guest-gc-error" class="giftcard-error"></div>
+
+        <!-- Shown instead of the full form when arriving from a chat
+             conversation that already settled the details — just the
+             decided choice and a way to confirm, not a form full of
+             fields (amount picker, etc.) the person already resolved
+             a moment ago. "Edit details" swaps back to the full form
+             if something needs changing. -->
+        <div id="guest-gc-quick-confirm" style="display:none;">
+          <div style="background:var(--primary-lighter);border-radius:10px;padding:16px;margin-bottom:14px;">
+            <div style="font-weight:600;font-size:16px;" id="guest-gc-quick-summary-amount">$100 gift card</div>
+            <div style="font-size:13.5px;color:var(--text-secondary);margin-top:4px;" id="guest-gc-quick-summary-recipient"></div>
+            <div style="font-size:13.5px;color:var(--text-secondary);margin-top:2px;" id="guest-gc-quick-summary-purchaser"></div>
+          </div>
+          <button class="btn btn-primary btn-block" onclick="purchaseGuestGiftCard()">Purchase gift card</button>
+          <a href="#" style="display:block;text-align:center;font-size:13px;color:var(--primary);margin-top:10px;" onclick="document.getElementById('guest-gc-quick-confirm').style.display='none';document.getElementById('guest-gc-full-form-fields').style.display='block';return false;">Edit details</a>
+        </div>
+
+        <div id="guest-gc-full-form-fields">
         <div class="giftcard-amount-row">
           <button class="giftcard-amount-btn" onclick="selectGuestGiftCardAmount(50, this)">$50</button>
           <button class="giftcard-amount-btn" onclick="selectGuestGiftCardAmount(100, this)">$100</button>
@@ -963,6 +981,7 @@
         </div>
         <button class="btn btn-primary" onclick="purchaseGuestGiftCard()" style="margin-top:10px;">Purchase gift card</button>
         <div id="guest-gc-success" style="display:none;background:var(--primary-lighter);border-radius:8px;padding:12px;font-size:13px;margin-top:10px;"></div>
+        </div>
       </div>
 
       <p id="giftcard-signin-toggle" style="font-size:13px;color:var(--text-secondary);margin:16px 0;">
@@ -996,6 +1015,20 @@
 
         <div class="giftcard-panel" id="giftcard-signedin-buy-wrap" style="display:none;">
           <div class="giftcard-panel-title">Buy a gift card</div>
+
+          <!-- Same condensed view as the guest form — just the decided
+               choice when arriving from a settled chat conversation,
+               not the full amount-picker form. -->
+          <div id="giftcard-quick-confirm" style="display:none;">
+            <div style="background:var(--primary-lighter);border-radius:10px;padding:16px;margin-bottom:14px;">
+              <div style="font-weight:600;font-size:16px;" id="giftcard-quick-summary-amount">$100 gift card</div>
+              <div style="font-size:13.5px;color:var(--text-secondary);margin-top:4px;" id="giftcard-quick-summary-recipient"></div>
+            </div>
+            <button class="btn btn-primary btn-block" onclick="purchaseGiftCard()">Purchase gift card</button>
+            <a href="#" style="display:block;text-align:center;font-size:13px;color:var(--primary);margin-top:10px;" onclick="document.getElementById('giftcard-quick-confirm').style.display='none';document.getElementById('giftcard-full-form-fields').style.display='block';return false;">Edit details</a>
+          </div>
+
+          <div id="giftcard-full-form-fields">
           <div class="giftcard-amount-row" id="giftcard-amount-row">
             <button class="giftcard-amount-btn" data-amount="25" onclick="selectGiftCardAmount(25)">$25</button>
             <button class="giftcard-amount-btn" data-amount="50" onclick="selectGiftCardAmount(50)">$50</button>
@@ -1008,6 +1041,7 @@
           </div>
           <button class="btn btn-primary btn-block" onclick="purchaseGiftCard()">Purchase gift card</button>
           <p class="giftcard-note">This creates a real, redeemable gift card — no payment is actually charged in this prototype.</p>
+          </div>
         </div>
 
         <div class="giftcard-panel-title" style="margin-top:6px;">Your gift cards</div>
@@ -2420,6 +2454,20 @@ function revealManualGiftCardPurchase() {
   document.getElementById('giftcard-guest-manual-wrap').style.display = 'block';
   document.getElementById('giftcard-signedin-buy-wrap').style.display = 'block';
   document.getElementById('giftcard-manual-toggle').style.display = 'none';
+  // Default to the full form — someone clicking the manual toggle
+  // directly wants to fill it out themselves, not see a stale
+  // quick-confirm summary left over from an earlier chat session. The
+  // chat handoff path calls this too, but immediately switches back to
+  // quick-confirm right after, so this default never actually shows
+  // in that case.
+  const guestFull = document.getElementById('guest-gc-full-form-fields');
+  const guestQuick = document.getElementById('guest-gc-quick-confirm');
+  if (guestFull) guestFull.style.display = 'block';
+  if (guestQuick) guestQuick.style.display = 'none';
+  const signedInFull = document.getElementById('giftcard-full-form-fields');
+  const signedInQuick = document.getElementById('giftcard-quick-confirm');
+  if (signedInFull) signedInFull.style.display = 'block';
+  if (signedInQuick) signedInQuick.style.display = 'none';
 }
 
 async function openChatAssistant(mode, skipOpener) {
@@ -2622,6 +2670,15 @@ async function handleChatAssistantFinalResult(finalResult) {
       const emailInput = document.getElementById('giftcard-recipient-email');
       if (nameInput && recipientName) nameInput.value = recipientName;
       if (emailInput && recipientEmail) emailInput.value = recipientEmail;
+
+      // The real fields above are still what actually gets submitted —
+      // this condensed view is just what's shown, so the person isn't
+      // looking at a whole form's worth of fields for a choice they
+      // already made in the conversation a moment ago.
+      document.getElementById('giftcard-quick-summary-amount').textContent = `$${amount} gift card`;
+      document.getElementById('giftcard-quick-summary-recipient').textContent = recipientName ? `For ${recipientName}` : 'For yourself';
+      document.getElementById('giftcard-full-form-fields').style.display = 'none';
+      document.getElementById('giftcard-quick-confirm').style.display = 'block';
     } else {
       // Guest gift card purchase needs the BUYER's own name/email (no
       // account to pull it from) — the conversation collects this
@@ -2636,6 +2693,12 @@ async function handleChatAssistantFinalResult(finalResult) {
       if (purchaserNameEl && purchaserName) purchaserNameEl.value = purchaserName;
       if (purchaserEmailEl && purchaserEmail) purchaserEmailEl.value = purchaserEmail;
       if (recipientNameEl && recipientName) recipientNameEl.value = recipientName;
+
+      document.getElementById('guest-gc-quick-summary-amount').textContent = `$${amount} gift card`;
+      document.getElementById('guest-gc-quick-summary-recipient').textContent = recipientName ? `For ${recipientName}` : 'For yourself';
+      document.getElementById('guest-gc-quick-summary-purchaser').textContent = purchaserName && purchaserEmail ? `From ${purchaserName} (${purchaserEmail})` : '';
+      document.getElementById('guest-gc-full-form-fields').style.display = 'none';
+      document.getElementById('guest-gc-quick-confirm').style.display = 'block';
     }
   } else if (finalResult.type === 'ready_to_purchase_package') {
     // Payment method choice (real card on file vs. redeeming a gift
