@@ -453,11 +453,11 @@
         <div class="sidebar-logo-sub">Client Portal</div>
       </div>
     </div>
-    <button class="nav-item nav-item-requires-account" data-screen="home" onclick="goTo('home')">
+    <button class="nav-item active" data-screen="home" onclick="goTo('home')">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1V10"/></svg>
       Home
     </button>
-    <button class="nav-item active" data-screen="book" onclick="goTo('book')">
+    <button class="nav-item" data-screen="book" onclick="goTo('book')">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>
       Book a session
     </button>
@@ -521,6 +521,24 @@
         <p class="giftcard-note" style="margin-top:-4px;margin-bottom:10px;">Your history won't be visible again unless you set a password — without one, you won't be able to sign back in from another device or after this session ends.</p>
         <button class="btn btn-primary btn-sm" onclick="goTo('account-settings'); setTimeout(() => { const f = document.getElementById('acct-new-password'); if (f) { f.scrollIntoView({behavior:'smooth', block:'center'}); f.focus(); } }, 50);">Set a password now</button>
       </div>
+
+      <!-- Minimalist chat-first hero — shown to everyone, guest or
+           signed in. A single inviting input, not a form. Typing a
+           first message here smoothly hands off into the same full
+           chat screen (entryPoint 'home', the unified concierge) with
+           that message already sent, rather than duplicating chat
+           infrastructure in two places at once. -->
+      <div id="home-hero" style="margin-bottom:28px;">
+        <h1 id="home-hero-title" style="font-size:23px;margin-bottom:4px;">Welcome to Raaka Rituals</h1>
+        <p id="home-hero-sub" style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">Tell us what you're looking for — a session, a gift card, or just figuring out where to start.</p>
+        <div style="display:flex;gap:8px;">
+          <input type="text" class="form-input" id="home-hero-input" placeholder="e.g. My shoulders have been really tight lately..." style="flex:1;" onkeydown="if(event.key==='Enter'){startHomeConcierge();}">
+          <button type="button" class="btn btn-secondary" onclick="startHomeConcierge(true)" title="Speak instead">🎤</button>
+          <button class="btn btn-primary" onclick="startHomeConcierge()">Send</button>
+        </div>
+      </div>
+
+      <div id="home-account-section" style="display:none;">
       <div class="welcome-header">
         <div class="tenant-note">✎ Content with a dotted outline like <span class="welcome-eyebrow customizable inline-demo" contenteditable="true">Good to see you</span> is editable. The client's name (shown as "Jordan" here) is auto-populated from their account, not something you write.</div>
         <h1 class="welcome-title">Hi <span class="dynamic-field" id="client-first-name" contenteditable="true" title="Auto-populated from the logged-in client's account">Jordan</span> — <span class="customizable" contenteditable="true">ready for your next ritual?</span></h1>
@@ -561,6 +579,12 @@
         </button>
       </div>
 
+      <h2 class="section-title">Upcoming sessions</h2>
+      <div class="session-list" id="home-upcoming-list"></div>
+      </div>
+
+      <button class="btn btn-secondary btn-block" style="margin-bottom:20px;" onclick="goTo('directory'); renderDirectoryScreen();">👥 Meet our practitioners</button>
+
       <a href="https://www.theraakaco.com/raakawellness" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:space-between;background:var(--primary-lighter);border-radius:12px;padding:14px 18px;margin-bottom:28px;text-decoration:none;color:inherit;">
         <div>
           <div style="font-weight:600;font-size:14.5px;">Shop Raaka Wellness</div>
@@ -568,9 +592,6 @@
         </div>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg>
       </a>
-
-      <h2 class="section-title">Upcoming sessions</h2>
-      <div class="session-list" id="home-upcoming-list"></div>
 
       <h2 class="section-title mt">From the community</h2>
       <div id="home-reviews-list"></div>
@@ -994,6 +1015,15 @@
     </section>
 
     <!-- ===== ACCOUNT SETTINGS ===== -->
+    <!-- ===== PRACTITIONER DIRECTORY ===== -->
+    <section class="screen" id="screen-directory">
+      <div class="flow-header">
+        <button class="flow-back" onclick="goTo('home')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>
+        <h1 style="font-size:21px;">Meet our practitioners</h1>
+      </div>
+      <div id="directory-list" style="display:flex;flex-direction:column;gap:14px;"></div>
+    </section>
+
     <section class="screen" id="screen-account-settings">
       <h2 class="section-title">Account settings</h2>
       <p style="color:var(--text-secondary);font-size:13.5px;margin-top:-8px;margin-bottom:18px;">Manage your name, phone, email, and password</p>
@@ -1056,11 +1086,11 @@
 <!-- MOBILE TAB BAR -->
 <nav class="mobile-tabbar">
   <div class="mobile-tabbar-inner">
-    <button class="tab-item nav-item-requires-account" data-screen="home" onclick="goTo('home')">
+    <button class="tab-item active" data-screen="home" onclick="goTo('home')">
       <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1V10"/></svg>
       Home
     </button>
-    <button class="tab-item active" data-screen="book" onclick="goTo('book')">
+    <button class="tab-item" data-screen="book" onclick="goTo('book')">
       <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>
       Book
     </button>
@@ -1315,7 +1345,57 @@ function renderHomeReviews() {
       <div class="home-review-text">\u201c${r.text}\u201d</div>
     </div>`).join('');
 }
+// Real practitioner data — same underlying tables the conversational
+// assistant's get_practitioners tool reads from, just queried directly
+// here instead of through the backend, since this is a plain read the
+// browser's own anon-key client can already do.
+async function renderDirectoryScreen() {
+  const tenantIdForQuery = pilotProfile ? pilotProfile.tenant_id : RAAKA_TENANT_ID;
+  const { data: staffRows } = await pilotClient.from('profiles')
+    .select('id, full_name, specialty, bio').eq('tenant_id', tenantIdForQuery).in('role', ['staff', 'owner']);
+  const listEl = document.getElementById('directory-list');
+  if (!staffRows || !staffRows.length) {
+    listEl.innerHTML = '<div class="empty-state">No practitioners listed yet — check back soon.</div>';
+    return;
+  }
+  const { data: links } = await pilotClient.from('practitioner_services').select('practitioner_id, service_id');
+  const { data: services } = await pilotClient.from('services').select('id, name').eq('tenant_id', tenantIdForQuery).eq('active', true);
+  const serviceNameById = {};
+  (services || []).forEach(s => { serviceNameById[s.id] = s.name; });
+  const servicesByPractitioner = {};
+  (links || []).forEach(l => {
+    if (!servicesByPractitioner[l.practitioner_id]) servicesByPractitioner[l.practitioner_id] = [];
+    if (serviceNameById[l.service_id]) servicesByPractitioner[l.practitioner_id].push(serviceNameById[l.service_id]);
+  });
+
+  listEl.innerHTML = staffRows.map(p => {
+    const offeredServices = servicesByPractitioner[p.id] || [];
+    return `
+    <div class="giftcard-panel">
+      <div style="font-weight:600;font-size:16px;">${p.full_name}</div>
+      ${p.specialty ? `<div style="font-size:13.5px;color:var(--primary);font-weight:500;margin-top:2px;">${p.specialty}</div>` : ''}
+      ${p.bio ? `<p style="font-size:13.5px;color:var(--text-secondary);margin:8px 0 0;">${p.bio}</p>` : ''}
+      ${offeredServices.length ? `<div style="font-size:12.5px;color:var(--text-secondary);margin-top:8px;">Offers: ${offeredServices.join(', ')}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
 async function renderHome() {
+  // Everything below next-session/upcoming/quick-actions genuinely
+  // needs a real account to mean anything (a guest has no sessions, no
+  // package balance) — kept as its own toggleable section rather than
+  // trying to show a fake/empty version of each to a guest.
+  document.getElementById('home-account-section').style.display = pilotProfile ? 'block' : 'none';
+  const heroTitle = document.getElementById('home-hero-title');
+  const heroSub = document.getElementById('home-hero-sub');
+  if (pilotProfile) {
+    heroTitle.textContent = 'Welcome back' + (pilotProfile.full_name ? ', ' + pilotProfile.full_name.split(' ')[0] : '');
+    heroSub.textContent = 'Need to book again, or something new today?';
+  } else {
+    heroTitle.textContent = 'Welcome to Raaka Rituals';
+    heroSub.textContent = "Tell us what you're looking for — a session, a gift card, or just figuring out where to start.";
+  }
+
   const firstNameEl = document.getElementById('client-first-name');
   if (pilotProfile) {
     firstNameEl.textContent = (pilotProfile.full_name || '').split(' ')[0] || 'there';
@@ -2192,6 +2272,24 @@ function logFunnelEvent(stage) {
 let chatAssistantMode = null; // 'booking' | 'gift_card'
 let chatVoiceRecognition = null;
 
+// Hands off from the minimal Home hero input into the full chat screen
+// (the unified 'home' concierge) rather than duplicating chat UI and
+// state in two places — the person's first message goes straight in as
+// soon as the real chat screen is ready, so it feels continuous rather
+// than like starting over.
+async function startHomeConcierge(useVoiceFirst) {
+  const heroInput = document.getElementById('home-hero-input');
+  const text = heroInput.value.trim();
+  await openChatAssistant('home');
+  if (useVoiceFirst) {
+    toggleChatVoiceInput();
+  } else if (text) {
+    await sendChatAssistantMessage(text);
+  }
+  heroInput.value = '';
+}
+
+
 // One-shot dictation into the chat input — deliberately NOT the same
 // continuous, auto-restarting pattern used for staff session recording.
 // This is a single person speaking a single short answer, so there's no
@@ -2269,10 +2367,18 @@ function revealManualGiftCardPurchase() {
 async function openChatAssistant(mode) {
   chatAssistantMode = mode;
   chatAssistantMessages = [];
-  const titles = { gift_card: 'Let\'s get you a gift card', package: 'Let\'s find you a package', booking: 'Let\'s find you a time' };
+  const titles = { gift_card: 'Let\'s get you a gift card', package: 'Let\'s find you a package', booking: 'Let\'s find you a time', home: 'How can we help?' };
   document.getElementById('chat-assistant-title').textContent = titles[mode] || 'Let\'s chat';
   const manualLinkLabels = { gift_card: '📋 Buy manually instead', package: '📋 See packages manually', booking: '📅 Browse the calendar instead' };
-  document.getElementById('chat-assistant-manual-link').textContent = manualLinkLabels[mode] || '📋 Do this manually instead';
+  const manualLinkEl = document.getElementById('chat-assistant-manual-link');
+  if (manualLinkLabels[mode]) {
+    manualLinkEl.textContent = manualLinkLabels[mode];
+    manualLinkEl.style.display = 'inline-block';
+  } else {
+    // 'home' mode has no single manual alternative to offer — it's the
+    // general concierge, not a stand-in for one specific manual screen.
+    manualLinkEl.style.display = 'none';
+  }
   document.getElementById('chat-assistant-transcript').innerHTML = '';
   document.getElementById('chat-assistant-quick-replies').innerHTML = '';
   document.getElementById('chat-assistant-error').classList.remove('show');
@@ -2284,7 +2390,7 @@ async function openChatAssistant(mode) {
 }
 
 function closeChatAssistant() {
-  const destinations = { gift_card: 'giftcards', package: 'packages', booking: 'book' };
+  const destinations = { gift_card: 'giftcards', package: 'packages', booking: 'book', home: 'home' };
   goTo(destinations[chatAssistantMode] || 'home');
 }
 
@@ -2353,12 +2459,23 @@ async function sendChatAssistantMessage(presetText) {
       const qrWrap = document.getElementById('chat-assistant-quick-replies');
       qrWrap.innerHTML = result.quickReplies.map(opt =>
         `<button type="button" class="btn btn-secondary btn-sm" onclick="sendChatAssistantMessage('${String(opt).replace(/'/g, "\\'")}')">${opt}</button>`
-      ).join('') + `<button type="button" class="btn btn-secondary btn-sm" onclick="closeChatAssistant()">${chatAssistantMode === 'booking' ? '📅 See full calendar' : '📋 See manually'}</button>`;
+      ).join('') + (chatAssistantMode === 'home' ? '' : `<button type="button" class="btn btn-secondary btn-sm" onclick="closeChatAssistant()">${chatAssistantMode === 'booking' ? '📅 See full calendar' : '📋 See manually'}</button>`);
       // Hidden by default when real options are on screen — decluttering
       // the two-ways-to-answer look — but never actually lost: the small
       // toggle brings typing back instantly if none of the options fit
       // (e.g. "actually, do you have anything on Friday instead?").
       hideChatAssistantInputForOptions();
+    }
+
+    if (result.showDirectoryLink) {
+      const wrap = document.getElementById('chat-assistant-transcript');
+      const linkEl = document.createElement('a');
+      linkEl.href = '#';
+      linkEl.textContent = '→ See our full practitioner directory';
+      linkEl.style.cssText = 'align-self:flex-start;color:var(--primary);font-size:14px;font-weight:600;';
+      linkEl.onclick = (e) => { e.preventDefault(); goTo('directory'); renderDirectoryScreen(); };
+      wrap.appendChild(linkEl);
+      wrap.scrollTop = wrap.scrollHeight;
     }
 
     if (result.finalResult) {
@@ -4584,13 +4701,13 @@ async function renderGiftCardsList() {
       if (s === 'packages') { await loadRealPackages(); await renderPackages(); }
     });
   });
-  // Explicit, rather than trusting the static HTML's default "active"
-  // state — that would otherwise leave the visible screen and the
-  // highlighted nav item out of sync (the markup defaults to Home's
-  // section but Book's nav item, since Book is what an unauthenticated
-  // visitor should land on). This resolves both consistently in one
-  // call, using whatever checkIncomingRealSession above actually found.
-  await goTo(pilotProfile ? 'home' : 'book');
+  // Home is now the universal landing screen — guests included, since
+  // the whole point of the concierge chat there is to help someone who
+  // isn't sure what they need yet, and a guest is exactly who benefits
+  // most from that. renderHome() itself handles showing/hiding the
+  // account-specific sections (next session, upcoming, quick actions)
+  // based on whether pilotProfile actually exists.
+  await goTo('home');
 })();
 
 // ===== AUTO SIGN-OUT AFTER INACTIVITY =====
