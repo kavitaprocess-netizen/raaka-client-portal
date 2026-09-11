@@ -481,7 +481,7 @@ module.exports = async function handler(req, res) {
       mentionManualOptionTool,
       {
         name: 'ready_to_book',
-        description: 'Call this ONLY once the client has explicitly confirmed a specific real service, practitioner, date, and time from what check_availability actually returned — never a slot you have not verified is real.' + (isGuest ? ' Since this person is not signed in, you must also have collected their name, email, and phone before calling this.' : ''),
+        description: 'Call this ONLY once the client has explicitly confirmed a specific real service, practitioner, date, and time from what check_availability actually returned — never a slot you have not verified is real. You must ALSO have asked how they want to pay (gift card, or pay at their appointment) before calling this — do not leave this for the confirm screen, ask it as a natural part of the conversation.' + (isGuest ? ' Since this person is not signed in, you must also have collected their name, email, and phone before calling this.' : ''),
         input_schema: {
           type: 'object',
           properties: {
@@ -489,9 +489,11 @@ module.exports = async function handler(req, res) {
             date: { type: 'string', description: 'YYYY-MM-DD' }, time: { type: 'string', description: 'e.g. "2:00 PM"' },
             guestName: { type: 'string', description: 'Required if not signed in, omit if signed in' },
             guestEmail: { type: 'string', description: 'Required if not signed in, omit if signed in' },
-            guestPhone: { type: 'string', description: 'Required if not signed in, omit if signed in' }
+            guestPhone: { type: 'string', description: 'Required if not signed in, omit if signed in' },
+            paymentMethod: { type: 'string', enum: ['gift_card', 'pay_at_appointment'], description: 'How they want to pay - always ask, never assume' },
+            giftCardCode: { type: 'string', description: 'Required only if paymentMethod is gift_card - the real code, ask them to read it out' }
           },
-          required: isGuest ? ['serviceId', 'practitionerId', 'date', 'time', 'guestName', 'guestEmail', 'guestPhone'] : ['serviceId', 'practitionerId', 'date', 'time']
+          required: (isGuest ? ['serviceId', 'practitionerId', 'date', 'time', 'guestName', 'guestEmail', 'guestPhone', 'paymentMethod'] : ['serviceId', 'practitionerId', 'date', 'time', 'paymentMethod'])
         }
       }
     ];
@@ -576,7 +578,7 @@ module.exports = async function handler(req, res) {
       },
       {
         name: 'ready_to_book',
-        description: 'Call this ONLY once the client has explicitly confirmed a specific real service, practitioner, date, and time from what check_availability actually returned — never a slot you have not verified is real.' + (isGuest ? ' Since this person is not signed in, you must also have collected their name, email, and phone before calling this.' : ''),
+        description: 'Call this ONLY once the client has explicitly confirmed a specific real service, practitioner, date, and time from what check_availability actually returned — never a slot you have not verified is real. You must ALSO have asked how they want to pay (gift card, or pay at their appointment) before calling this — do not leave this for the confirm screen, ask it as a natural part of the conversation.' + (isGuest ? ' Since this person is not signed in, you must also have collected their name, email, and phone before calling this.' : ''),
         input_schema: {
           type: 'object',
           properties: {
@@ -584,9 +586,11 @@ module.exports = async function handler(req, res) {
             date: { type: 'string', description: 'YYYY-MM-DD' }, time: { type: 'string', description: 'e.g. "2:00 PM"' },
             guestName: { type: 'string', description: 'Required if not signed in, omit if signed in' },
             guestEmail: { type: 'string', description: 'Required if not signed in, omit if signed in' },
-            guestPhone: { type: 'string', description: 'Required if not signed in, omit if signed in' }
+            guestPhone: { type: 'string', description: 'Required if not signed in, omit if signed in' },
+            paymentMethod: { type: 'string', enum: ['gift_card', 'pay_at_appointment'], description: 'How they want to pay - always ask, never assume' },
+            giftCardCode: { type: 'string', description: 'Required only if paymentMethod is gift_card - the real code, ask them to read it out' }
           },
-          required: isGuest ? ['serviceId', 'practitionerId', 'date', 'time', 'guestName', 'guestEmail', 'guestPhone'] : ['serviceId', 'practitionerId', 'date', 'time']
+          required: (isGuest ? ['serviceId', 'practitionerId', 'date', 'time', 'guestName', 'guestEmail', 'guestPhone', 'paymentMethod'] : ['serviceId', 'practitionerId', 'date', 'time', 'paymentMethod'])
         }
       },
       {

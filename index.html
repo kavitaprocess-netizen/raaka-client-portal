@@ -662,7 +662,8 @@
           </div>
           <div id="guest-identity-quick-confirm" style="display:none;background:var(--primary-lighter);border-radius:10px;padding:14px 16px;margin-bottom:14px;">
             <div style="font-size:13.5px;" id="guest-identity-summary-line"></div>
-            <a href="#" style="display:inline-block;font-size:12.5px;color:var(--primary);margin-top:6px;" onclick="document.getElementById('guest-identity-quick-confirm').style.display='none';document.getElementById('guest-form-fields').style.display='block';return false;">Edit details</a>
+            <div style="font-size:13.5px;margin-top:4px;" id="guest-payment-summary-line"></div>
+            <a href="#" style="display:inline-block;font-size:12.5px;color:var(--primary);margin-top:6px;" onclick="document.getElementById('guest-identity-quick-confirm').style.display='none';document.getElementById('guest-form-fields').style.display='block';document.getElementById('guest-payment-method-section').style.display='block';return false;">Edit details</a>
           </div>
           <div id="guest-form-fields">
             <div class="form-field">
@@ -726,6 +727,11 @@
             </div>
         </div>
         <div id="real-payment-section" style="display:none;">
+          <div id="real-payment-quick-confirm" style="display:none;background:var(--primary-lighter);border-radius:10px;padding:14px 16px;margin-bottom:14px;">
+            <div style="font-size:13.5px;" id="real-payment-summary-line"></div>
+            <a href="#" style="display:inline-block;font-size:12.5px;color:var(--primary);margin-top:6px;" onclick="document.getElementById('real-payment-quick-confirm').style.display='none';document.getElementById('real-payment-fields').style.display='block';return false;">Edit</a>
+          </div>
+          <div id="real-payment-fields">
           <div class="giftcard-error" id="real-payment-error"></div>
           <label class="form-label">How would you like to pay?</label>
           <div class="panel-sub" style="margin-bottom:10px;">Nothing is charged now — this is settled once your session is complete. Package credit, if you have any, can be applied at that time.</div>
@@ -755,6 +761,7 @@
             <input type="radio" disabled>
             <span>Pay now (online) — <em>coming soon</em></span>
           </label>
+          </div>
         </div>
         <div class="form-field" style="margin-top:18px;">
           <label class="form-label">Anything your practitioner should know?</label>
@@ -2463,6 +2470,12 @@ function revealManualBooking() {
   const identityQuick = document.getElementById('guest-identity-quick-confirm');
   if (identityFull) identityFull.style.display = 'block';
   if (identityQuick) identityQuick.style.display = 'none';
+  const guestPaymentFull = document.getElementById('guest-payment-method-section');
+  if (guestPaymentFull) guestPaymentFull.style.display = 'block';
+  const realPaymentFull = document.getElementById('real-payment-fields');
+  const realPaymentQuick = document.getElementById('real-payment-quick-confirm');
+  if (realPaymentFull) realPaymentFull.style.display = 'block';
+  if (realPaymentQuick) realPaymentQuick.style.display = 'none';
 }
 
 function revealManualGiftCardPurchase() {
@@ -2666,7 +2679,7 @@ async function sendChatAssistantMessage(presetText) {
 // themselves. This assistant never writes to the database directly.
 async function handleChatAssistantFinalResult(finalResult) {
   if (finalResult.type === 'ready_to_book') {
-    const { serviceId, practitionerId, date, time, guestName, guestEmail, guestPhone } = finalResult.params;
+    const { serviceId, practitionerId, date, time, guestName, guestEmail, guestPhone, paymentMethod, giftCardCode } = finalResult.params;
     await resetBookingFlow();
     selectService(serviceId);
     if (!bookingState.service) {
@@ -2694,14 +2707,72 @@ async function handleChatAssistantFinalResult(finalResult) {
       if (emailEl && guestEmail) emailEl.value = guestEmail;
       if (phoneEl && guestPhone) phoneEl.value = guestPhone;
 
-      // Identity info is already collected — condensed to one line with
-      // an Edit link, same principle as gift cards. Payment method
-      // stays fully visible below this regardless, since that's a real
-      // decision the conversation never actually asked about.
+      // Real payment resolution, not just a label — the same real
+      // validation the manual form uses (a bad or already-redeemed
+      // code genuinely fails here, same as it would if typed by hand).
+      let paymentResolvedOk = false;
+      let paymentSummaryText = '';
+      if (paymentMethod === 'pay_at_appointment') {
+        const radio = document.querySelector('input[name="guest-payment-method"][value="pay_at_appointment"]');
+        if (radio) { radio.checked = true; selectGuestPaymentMethod('pay_at_appointment'); }
+        paymentResolvedOk = true;
+        paymentSummaryText = 'Paying: at your appointment';
+      } else if (paymentMethod === 'gift_card' && giftCardCode) {
+        const radio = document.querySelector('input[name="guest-payment-method"][value="gift_card"]');
+        if (radio) { radio.checked = true; selectGuestPaymentMethod('gift_card'); }
+        const codeInput = document.getElementById('guest-giftcard-code');
+        if (codeInput) codeInput.value = giftCardCode;
+        await addGuestGiftCard();
+        const errorEl = document.getElementById('guest-booking-error');
+        if (!errorEl.classList.contains('show') && selectedGuestGiftCards.length) {
+          paymentResolvedOk = true;
+          paymentSummaryText = `Paying: gift card ${giftCardCode}`;
+        }
+      }
+
       if (guestName && guestEmail) {
         document.getElementById('guest-identity-summary-line').textContent = `Booking as ${guestName} (${guestEmail})`;
         document.getElementById('guest-form-fields').style.display = 'none';
+        if (paymentResolvedOk) {
+          // Both identity and payment resolved cleanly — collapse both
+          // into the one summary, matching gift cards' pattern.
+          document.getElementById('guest-payment-summary-line').textContent = paymentSummaryText;
+          document.getElementById('guest-payment-method-section').style.display = 'none';
+        } else {
+          // Payment genuinely didn't resolve (bad code, or nothing
+          // chosen) — leave it visible so they can sort it out
+          // directly, rather than hiding a real problem behind a
+          // summary that implies everything's already settled.
+          document.getElementById('guest-payment-summary-line').textContent = '';
+        }
         document.getElementById('guest-identity-quick-confirm').style.display = 'block';
+      }
+    } else {
+      // Signed in: identity's already known from their account — only
+      // payment method genuinely needed resolving via the conversation.
+      let paymentResolvedOk = false;
+      let paymentSummaryText = '';
+      if (paymentMethod === 'pay_at_appointment') {
+        const radio = document.querySelector('input[name="payment-method"][value="pay_at_appointment"]');
+        if (radio) { radio.checked = true; selectPaymentMethod('pay_at_appointment'); }
+        paymentResolvedOk = true;
+        paymentSummaryText = 'Paying: at your appointment';
+      } else if (paymentMethod === 'gift_card' && giftCardCode) {
+        const radio = document.querySelector('input[name="payment-method"][value="gift_card"]');
+        if (radio) { radio.checked = true; selectPaymentMethod('gift_card'); }
+        const codeInput = document.getElementById('booking-giftcard-code');
+        if (codeInput) codeInput.value = giftCardCode;
+        await addManualGiftCardToSelection();
+        const errorEl = document.getElementById('real-payment-error');
+        if (!errorEl.classList.contains('show') && selectedGiftCardsForBooking.length) {
+          paymentResolvedOk = true;
+          paymentSummaryText = `Paying: gift card ${giftCardCode}`;
+        }
+      }
+      if (paymentResolvedOk) {
+        document.getElementById('real-payment-summary-line').textContent = paymentSummaryText;
+        document.getElementById('real-payment-fields').style.display = 'none';
+        document.getElementById('real-payment-quick-confirm').style.display = 'block';
       }
     }
   } else if (finalResult.type === 'ready_for_gift_card') {
