@@ -582,7 +582,7 @@
         <button class="flow-back" onclick="goTo('home')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>
         <h1 style="font-size:21px;">Book a session</h1>
       </div>
-      <button class="btn btn-secondary btn-block" style="margin-bottom:16px;" onclick="openChatAssistant('booking')">💬 Or just tell us what you need — chat to book instead</button>
+      <button class="btn btn-secondary btn-block" style="margin-bottom:16px;" onclick="openChatAssistant('booking')">💬 Prefer to just chat? Talk it through with us</button>
       <div class="flow-steps">
         <div class="flow-step" id="fstep-1"></div><div class="flow-step" id="fstep-2"></div>
         <div class="flow-step" id="fstep-3"></div><div class="flow-step" id="fstep-4"></div>
@@ -871,6 +871,7 @@
     <!-- ===== PACKAGES & PAYMENT ===== -->
     <section class="screen" id="screen-packages">
       <h1 style="font-size:23px;margin-bottom:20px;">Packages & payment</h1>
+      <button class="btn btn-secondary btn-block" style="margin-bottom:16px;" onclick="openChatAssistant('package')">💬 Prefer to just chat? Talk it through with us</button>
       <div class="balance-hero">
         <div class="balance-label">Your current balance</div>
         <div class="balance-value" id="balance-display">1 session</div>
@@ -893,8 +894,10 @@
          requires having a real account of your own. -->
     <section class="screen" id="screen-giftcards">
       <h1 style="font-size:23px;margin-bottom:20px;">Gift cards</h1>
-      <button class="btn btn-secondary btn-block" style="margin-bottom:16px;" onclick="openChatAssistant('gift_card')">💬 Or just tell us what you're looking for — chat to buy instead</button>
+      <button class="btn btn-secondary btn-block" style="margin-bottom:16px;" onclick="openChatAssistant('gift_card')">💬 Prefer to just chat? Talk it through with us</button>
+      <a href="#" id="giftcard-manual-toggle" style="display:block;font-size:13px;color:var(--primary);margin-bottom:16px;" onclick="revealManualGiftCardPurchase(); return false;">Buy manually instead</a>
 
+      <div id="giftcard-guest-manual-wrap" style="display:none;">
       <div class="giftcard-panel" id="guest-giftcard-purchase-wrap">
         <div class="giftcard-panel-title">Buy a gift card</div>
         <p class="giftcard-note" style="margin-top:-6px;">Purchase instantly — no account required.</p>
@@ -936,6 +939,7 @@
         <button class="btn btn-primary" onclick="giftCardSignIn()" style="margin-top:10px;">Sign in</button>
         <p class="giftcard-note">No account yet, or want a magic link instead? <a href="signin.html">Sign in here</a>, then come back to this page.</p>
       </div>
+      </div>
 
       <div id="giftcard-connected-wrap" style="display:none;">
         <div class="giftcard-balance-row" id="giftcard-balance-row"></div>
@@ -949,7 +953,7 @@
           </div>
         </div>
 
-        <div class="giftcard-panel">
+        <div class="giftcard-panel" id="giftcard-signedin-buy-wrap" style="display:none;">
           <div class="giftcard-panel-title">Buy a gift card</div>
           <div class="giftcard-amount-row" id="giftcard-amount-row">
             <button class="giftcard-amount-btn" data-amount="25" onclick="selectGiftCardAmount(25)">$25</button>
@@ -977,11 +981,14 @@
         <button class="flow-back" onclick="closeChatAssistant()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>
         <h1 style="font-size:21px;" id="chat-assistant-title">Let's find you a time</h1>
       </div>
+      <button class="btn btn-secondary btn-sm" id="chat-assistant-manual-link" style="margin-bottom:12px;" onclick="closeChatAssistant()">📅 Browse the calendar instead</button>
       <div id="chat-assistant-transcript" style="display:flex;flex-direction:column;gap:10px;padding:4px 0 16px;min-height:200px;"></div>
       <div id="chat-assistant-quick-replies" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;"></div>
+      <a href="#" id="chat-assistant-type-toggle" style="display:none;font-size:13px;color:var(--primary);margin-bottom:12px;" onclick="showChatAssistantInput(); return false;">✏️ or type something else</a>
       <div id="chat-assistant-error" class="giftcard-error"></div>
-      <div style="display:flex;gap:8px;position:sticky;bottom:0;background:var(--bg);padding-top:8px;">
+      <div id="chat-assistant-input-row" style="display:flex;gap:8px;position:sticky;bottom:0;background:var(--bg);padding-top:8px;">
         <input type="text" class="form-input" id="chat-assistant-input" placeholder="Type your answer..." style="flex:1;" onkeydown="if(event.key==='Enter'){sendChatAssistantMessage();}">
+        <button type="button" class="btn btn-secondary" id="chat-assistant-mic-btn" onclick="toggleChatVoiceInput()" title="Speak your answer">🎤 Speak</button>
         <button class="btn btn-primary" id="chat-assistant-send-btn" onclick="sendChatAssistantMessage()">Send</button>
       </div>
     </section>
@@ -2183,24 +2190,102 @@ function logFunnelEvent(stage) {
 // chat UI and, once the assistant signals a confirmed decision, hands
 // off to the exact same real screens the traditional flows already use.
 let chatAssistantMode = null; // 'booking' | 'gift_card'
+let chatVoiceRecognition = null;
+
+// One-shot dictation into the chat input — deliberately NOT the same
+// continuous, auto-restarting pattern used for staff session recording.
+// This is a single person speaking a single short answer, so there's no
+// multi-speaker diarization concern at all here; it just needs to
+// listen, fill the input with what it heard, and stop — the person can
+// still review and edit before hitting Send, same as if they'd typed it.
+function toggleChatVoiceInput() {
+  const micBtn = document.getElementById('chat-assistant-mic-btn');
+  const inputEl = document.getElementById('chat-assistant-input');
+
+  if (chatVoiceRecognition) {
+    chatVoiceRecognition.stop();
+    return;
+  }
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    const errorEl = document.getElementById('chat-assistant-error');
+    errorEl.textContent = "Voice input isn't supported in this browser — try typing instead.";
+    errorEl.classList.add('show');
+    return;
+  }
+
+  chatVoiceRecognition = new SpeechRecognition();
+  chatVoiceRecognition.continuous = false;
+  chatVoiceRecognition.interimResults = true;
+  chatVoiceRecognition.lang = 'en-US';
+
+  micBtn.textContent = '⏹️ Stop';
+  micBtn.classList.add('btn-primary');
+  micBtn.classList.remove('btn-secondary');
+
+  chatVoiceRecognition.onresult = (event) => {
+    let transcript = '';
+    for (let i = 0; i < event.results.length; i++) {
+      transcript += event.results[i][0].transcript;
+    }
+    inputEl.value = transcript;
+  };
+
+  chatVoiceRecognition.onerror = (event) => {
+    // Same lesson as the staff-side recording fix — 'no-speech' just
+    // means it didn't hear anything, not a real failure. Only a
+    // genuine problem (like a denied mic permission) is worth
+    // surfacing as an error.
+    if (event.error === 'no-speech' || event.error === 'aborted') return;
+    const errorEl = document.getElementById('chat-assistant-error');
+    errorEl.textContent = 'Could not use the microphone (' + event.error + ') — try typing instead.';
+    errorEl.classList.add('show');
+  };
+
+  chatVoiceRecognition.onend = () => {
+    chatVoiceRecognition = null;
+    micBtn.textContent = '🎤 Speak';
+    micBtn.classList.add('btn-secondary');
+    micBtn.classList.remove('btn-primary');
+  };
+
+  chatVoiceRecognition.start();
+}
+
 let chatAssistantMessages = [];
+
+// Shows whichever manual gift-card purchase section actually applies —
+// only one is ever really visible at a time, since the outer guest-vs-
+// signed-in state (already managed elsewhere) controls which of these
+// two containers is in play. Safe to just reveal both; the one that
+// doesn't apply stays invisible regardless, same as it always was.
+function revealManualGiftCardPurchase() {
+  document.getElementById('giftcard-guest-manual-wrap').style.display = 'block';
+  document.getElementById('giftcard-signedin-buy-wrap').style.display = 'block';
+  document.getElementById('giftcard-manual-toggle').style.display = 'none';
+}
 
 async function openChatAssistant(mode) {
   chatAssistantMode = mode;
   chatAssistantMessages = [];
-  document.getElementById('chat-assistant-title').textContent = mode === 'gift_card' ? 'Let\'s get you a gift card' : 'Let\'s find you a time';
+  const titles = { gift_card: 'Let\'s get you a gift card', package: 'Let\'s find you a package', booking: 'Let\'s find you a time' };
+  document.getElementById('chat-assistant-title').textContent = titles[mode] || 'Let\'s chat';
+  const manualLinkLabels = { gift_card: '📋 Buy manually instead', package: '📋 See packages manually', booking: '📅 Browse the calendar instead' };
+  document.getElementById('chat-assistant-manual-link').textContent = manualLinkLabels[mode] || '📋 Do this manually instead';
   document.getElementById('chat-assistant-transcript').innerHTML = '';
   document.getElementById('chat-assistant-quick-replies').innerHTML = '';
   document.getElementById('chat-assistant-error').classList.remove('show');
+  showChatAssistantInput();
   goTo('chat-assistant');
-  const opener = mode === 'gift_card'
-    ? "Hi! I can help you buy a gift card — is this for yourself or someone else?"
-    : "Hi! What can I help you book today?";
+  const opener = "Hi! How can I help?";
   appendChatBubble('assistant', opener);
+  chatAssistantMessages.push({ role: 'assistant', content: opener });
 }
 
 function closeChatAssistant() {
-  goTo(chatAssistantMode === 'gift_card' ? 'giftcards' : 'book');
+  const destinations = { gift_card: 'giftcards', package: 'packages', booking: 'book' };
+  goTo(destinations[chatAssistantMode] || 'home');
 }
 
 function appendChatBubble(role, text) {
@@ -2214,6 +2299,15 @@ function appendChatBubble(role, text) {
   wrap.scrollTop = wrap.scrollHeight;
 }
 
+function showChatAssistantInput() {
+  document.getElementById('chat-assistant-input-row').style.display = 'flex';
+  document.getElementById('chat-assistant-type-toggle').style.display = 'none';
+}
+function hideChatAssistantInputForOptions() {
+  document.getElementById('chat-assistant-input-row').style.display = 'none';
+  document.getElementById('chat-assistant-type-toggle').style.display = 'block';
+}
+
 async function sendChatAssistantMessage(presetText) {
   const inputEl = document.getElementById('chat-assistant-input');
   const text = (presetText !== undefined ? presetText : inputEl.value.trim());
@@ -2222,6 +2316,7 @@ async function sendChatAssistantMessage(presetText) {
   chatAssistantMessages.push({ role: 'user', content: text });
   inputEl.value = '';
   document.getElementById('chat-assistant-quick-replies').innerHTML = '';
+  showChatAssistantInput(); // visible again while waiting on a response, so nothing looks stuck
   const sendBtn = document.getElementById('chat-assistant-send-btn');
   sendBtn.disabled = true;
   const errorEl = document.getElementById('chat-assistant-error');
@@ -2238,7 +2333,8 @@ async function sendChatAssistantMessage(presetText) {
         anonKey: SUPABASE_ANON_KEY,
         guestTenantId: session ? null : RAAKA_TENANT_ID,
         timezone: tenantTimezone,
-        todayDateKey: new Date().toISOString().slice(0, 10)
+        todayDateKey: new Date().toISOString().slice(0, 10),
+        entryPoint: chatAssistantMode
       })
     });
     const result = await response.json();
@@ -2256,8 +2352,13 @@ async function sendChatAssistantMessage(presetText) {
     if (result.quickReplies && result.quickReplies.length) {
       const qrWrap = document.getElementById('chat-assistant-quick-replies');
       qrWrap.innerHTML = result.quickReplies.map(opt =>
-        `<button type="button" class="btn btn-secondary btn-sm" onclick="sendChatAssistantMessage(${JSON.stringify(opt)})">${opt}</button>`
-      ).join('');
+        `<button type="button" class="btn btn-secondary btn-sm" onclick="sendChatAssistantMessage('${String(opt).replace(/'/g, "\\'")}')">${opt}</button>`
+      ).join('') + `<button type="button" class="btn btn-secondary btn-sm" onclick="closeChatAssistant()">${chatAssistantMode === 'booking' ? '📅 See full calendar' : '📋 See manually'}</button>`;
+      // Hidden by default when real options are on screen — decluttering
+      // the two-ways-to-answer look — but never actually lost: the small
+      // toggle brings typing back instantly if none of the options fit
+      // (e.g. "actually, do you have anything on Friday instead?").
+      hideChatAssistantInputForOptions();
     }
 
     if (result.finalResult) {
@@ -2329,6 +2430,17 @@ async function handleChatAssistantFinalResult(finalResult) {
       if (purchaserEmailEl && purchaserEmail) purchaserEmailEl.value = purchaserEmail;
       if (recipientNameEl && recipientName) recipientNameEl.value = recipientName;
     }
+  } else if (finalResult.type === 'ready_to_purchase_package') {
+    // Payment method choice (real card on file vs. redeeming a gift
+    // card) is a genuinely more involved real flow than booking or a
+    // gift card purchase — it stays on the real Packages screen rather
+    // than being reproduced here, same safety principle as everywhere
+    // else in this assistant. Message shown BEFORE navigating away —
+    // appending to a transcript no longer on screen would never
+    // actually be seen.
+    const { packageName } = finalResult.params;
+    appendChatBubble('assistant', `Great — head down to "${packageName}" below and choose how you'd like to pay to finish up.`);
+    setTimeout(() => goTo('packages'), 1200);
   }
 }
 

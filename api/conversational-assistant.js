@@ -83,7 +83,7 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  const { messages, accessToken, anonKey, guestTenantId, timezone, todayDateKey } = req.body || {};
+  const { messages, accessToken, anonKey, guestTenantId, timezone, todayDateKey, entryPoint } = req.body || {};
   if (!Array.isArray(messages) || !messages.length) {
     res.status(400).json({ error: 'Missing conversation messages.' });
     return;
@@ -144,6 +144,15 @@ module.exports = async function handler(req, res) {
   async function toolGetServices() {
     const services = await restGet('/rest/v1/services?tenant_id=eq.' + tenantId + '&active=eq.true&select=id,name,price,duration_minutes,buffer_minutes,min_lead_time_minutes');
     return { services: services || [] };
+  }
+
+  async function toolGetPackages() {
+    // Packages always require a real account to hold the session credit
+    // — matches the exact same rule the traditional Packages screen
+    // enforces, not a new restriction invented here.
+    if (isGuest) return { requiresSignIn: true };
+    const packages = await restGet('/rest/v1/packages?tenant_id=eq.' + tenantId + '&active=eq.true&select=id,name,price,value,featured');
+    return { packages: packages || [] };
   }
 
   async function toolGetClientHistory() {
@@ -234,79 +243,122 @@ module.exports = async function handler(req, res) {
     return { slots: results.map(r => ({ ...r, practitionerName: practitionerNames[r.practitionerId] || 'a practitioner' })) };
   }
 
-  const tools = [
-    {
-      name: 'get_services',
-      description: 'Get the real list of active services this business offers, with real prices and durations. Call this before recommending or confirming any service.',
-      input_schema: { type: 'object', properties: {} }
-    },
-    ...(!isGuest ? [{
-      name: 'get_client_history',
-      description: 'Get this signed-in client\'s recent real appointment history, if any, so you can personalize the conversation for a returning client (e.g. offer their usual service/practitioner) rather than starting from scratch.',
-      input_schema: { type: 'object', properties: {} }
-    }] : []),
-    {
-      name: 'check_availability',
-      description: 'Get REAL open appointment slots for a service, optionally filtered by day-of-week and/or time-of-day preference. Always use this rather than guessing at availability — never invent a time.',
-      input_schema: {
-        type: 'object',
-        properties: {
-          service_name: { type: 'string', description: 'The service to check, matched against real service names' },
-          days_ahead: { type: 'integer', description: 'How many days ahead to search, default 14, max 21' },
-          preferred_days_of_week: { type: 'array', items: { type: 'string' }, description: 'Full day names the client mentioned, e.g. ["Tuesday","Thursday"], or omit if none' },
-          preferred_time_of_day: { type: 'string', enum: ['morning', 'afternoon', 'evening'], description: 'Omit if not stated' }
-        },
-        required: ['service_name']
-      }
-    },
-    {
-      name: 'present_options',
-      description: 'Show the client a short list of clickable choices (e.g. real time slots, or a yes/no) instead of making them type. Use this whenever check_availability returns real slots, or whenever a simple choice would be faster than typing.',
-      input_schema: {
-        type: 'object',
-        properties: { options: { type: 'array', items: { type: 'string' }, description: 'Short button labels, e.g. ["Tue Sep 16, 2:00 PM", "Thu Sep 18, 10:00 AM"]' } },
-        required: ['options']
-      }
-    },
-    {
-      name: 'ready_to_book',
-      description: 'Call this ONLY once the client has explicitly confirmed a specific real service, practitioner, date, and time from what check_availability actually returned — never a slot you have not verified is real.' + (isGuest ? ' Since this person is not signed in, you must also have collected their name, email, and phone before calling this.' : ''),
-      input_schema: {
-        type: 'object',
-        properties: {
-          serviceId: { type: 'string' }, practitionerId: { type: 'string' },
-          date: { type: 'string', description: 'YYYY-MM-DD' }, time: { type: 'string', description: 'e.g. "2:00 PM"' },
-          guestName: { type: 'string', description: 'Required if not signed in, omit if signed in' },
-          guestEmail: { type: 'string', description: 'Required if not signed in, omit if signed in' },
-          guestPhone: { type: 'string', description: 'Required if not signed in, omit if signed in' }
-        },
-        required: isGuest ? ['serviceId', 'practitionerId', 'date', 'time', 'guestName', 'guestEmail', 'guestPhone'] : ['serviceId', 'practitionerId', 'date', 'time']
-      }
-    },
-    {
-      name: 'ready_for_gift_card',
-      description: 'Call this ONLY once the client has explicitly confirmed a specific dollar amount for a gift card purchase, and given recipient info if it is a gift for someone else.' + (isGuest ? ' Since this person is not signed in, you must also have collected their own name and email (the purchaser, not necessarily the recipient) before calling this.' : ''),
-      input_schema: {
-        type: 'object',
-        properties: {
-          amount: { type: 'number' },
-          recipientName: { type: 'string', description: 'Omit if this is for themselves' },
-          recipientEmail: { type: 'string', description: 'Omit if this is for themselves — note: for a guest purchaser, only recipient NAME is actually used, not a separate recipient email' },
-          purchaserName: { type: 'string', description: 'Required if not signed in (this is the buyer, not the recipient), omit if signed in' },
-          purchaserEmail: { type: 'string', description: 'Required if not signed in (this is the buyer, not the recipient), omit if signed in' }
-        },
-        required: isGuest ? ['amount', 'purchaserName', 'purchaserEmail'] : ['amount']
-      }
-    }
-  ];
+  const validEntryPoints = ['booking', 'gift_card', 'package'];
+  if (!validEntryPoints.includes(entryPoint)) {
+    res.status(400).json({ error: 'Missing or invalid entry point.' });
+    return;
+  }
 
-  const systemPrompt = "You are a warm, efficient front-desk assistant for a wellness studio (Raaka Rituals), helping over chat the way a great in-person receptionist would - natural, unhurried, but quick to get to real information. You can help book an appointment or buy a gift card. " +
+  const historyTool = !isGuest ? [{
+    name: 'get_client_history',
+    description: 'Get this signed-in client\'s recent real appointment history, if any, so you can personalize the conversation for a returning client (e.g. offer their usual service/practitioner) rather than starting from scratch.',
+    input_schema: { type: 'object', properties: {} }
+  }] : [];
+
+  const presentOptionsTool = {
+    name: 'present_options',
+    description: 'Show the client a short list of clickable choices (e.g. real time slots, or a yes/no) instead of making them type. Use this whenever you have a short real list to offer, or whenever a simple choice would be faster than typing.',
+    input_schema: {
+      type: 'object',
+      properties: { options: { type: 'array', items: { type: 'string' }, description: 'Short button labels, e.g. ["Tue Sep 16, 2:00 PM", "Thu Sep 18, 10:00 AM"]' } },
+      required: ['options']
+    }
+  };
+
+  // Tools are scoped strictly to the entry point the person actually
+  // chose — this assistant does NOT pivot between booking, gift cards,
+  // and packages within one conversation. If someone asks for something
+  // else, the system prompt below tells it to redirect them to close
+  // this chat and use the matching button instead, rather than handling
+  // it here.
+  let tools;
+  if (entryPoint === 'booking') {
+    tools = [
+      { name: 'get_services', description: 'Get the real list of active services this business offers, with real prices and durations. Call this before recommending or confirming any service.', input_schema: { type: 'object', properties: {} } },
+      ...historyTool,
+      {
+        name: 'check_availability',
+        description: 'Get REAL open appointment slots for a service, optionally filtered by day-of-week and/or time-of-day preference. Always use this rather than guessing at availability — never invent a time.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            service_name: { type: 'string', description: 'The service to check, matched against real service names' },
+            days_ahead: { type: 'integer', description: 'How many days ahead to search, default 14, max 21' },
+            preferred_days_of_week: { type: 'array', items: { type: 'string' }, description: 'Full day names the client mentioned, e.g. ["Tuesday","Thursday"], or omit if none' },
+            preferred_time_of_day: { type: 'string', enum: ['morning', 'afternoon', 'evening'], description: 'Omit if not stated' }
+          },
+          required: ['service_name']
+        }
+      },
+      presentOptionsTool,
+      {
+        name: 'ready_to_book',
+        description: 'Call this ONLY once the client has explicitly confirmed a specific real service, practitioner, date, and time from what check_availability actually returned — never a slot you have not verified is real.' + (isGuest ? ' Since this person is not signed in, you must also have collected their name, email, and phone before calling this.' : ''),
+        input_schema: {
+          type: 'object',
+          properties: {
+            serviceId: { type: 'string' }, practitionerId: { type: 'string' },
+            date: { type: 'string', description: 'YYYY-MM-DD' }, time: { type: 'string', description: 'e.g. "2:00 PM"' },
+            guestName: { type: 'string', description: 'Required if not signed in, omit if signed in' },
+            guestEmail: { type: 'string', description: 'Required if not signed in, omit if signed in' },
+            guestPhone: { type: 'string', description: 'Required if not signed in, omit if signed in' }
+          },
+          required: isGuest ? ['serviceId', 'practitionerId', 'date', 'time', 'guestName', 'guestEmail', 'guestPhone'] : ['serviceId', 'practitionerId', 'date', 'time']
+        }
+      }
+    ];
+  } else if (entryPoint === 'gift_card') {
+    tools = [
+      ...historyTool,
+      presentOptionsTool,
+      {
+        name: 'ready_for_gift_card',
+        description: 'Call this ONLY once the client has explicitly confirmed a specific dollar amount for a gift card purchase, and given recipient info if it is a gift for someone else.' + (isGuest ? ' Since this person is not signed in, you must also have collected their own name and email (the purchaser, not necessarily the recipient) before calling this.' : ''),
+        input_schema: {
+          type: 'object',
+          properties: {
+            amount: { type: 'number' },
+            recipientName: { type: 'string', description: 'Omit if this is for themselves' },
+            recipientEmail: { type: 'string', description: 'Omit if this is for themselves — note: for a guest purchaser, only recipient NAME is actually used, not a separate recipient email' },
+            purchaserName: { type: 'string', description: 'Required if not signed in (this is the buyer, not the recipient), omit if signed in' },
+            purchaserEmail: { type: 'string', description: 'Required if not signed in (this is the buyer, not the recipient), omit if signed in' }
+          },
+          required: isGuest ? ['amount', 'purchaserName', 'purchaserEmail'] : ['amount']
+        }
+      }
+    ];
+  } else { // 'package'
+    tools = [
+      {
+        name: 'get_packages',
+        description: 'Get the real list of session packages this business offers, with real prices and what each includes. Packages always require a signed-in account (to hold the session credit) — if this returns requiresSignIn, tell the person they need to sign in first and do not proceed further.',
+        input_schema: { type: 'object', properties: {} }
+      },
+      ...historyTool,
+      presentOptionsTool,
+      {
+        name: 'ready_to_purchase_package',
+        description: 'Call this ONLY once the signed-in client has explicitly confirmed a specific real package by name. Never call this for a guest — get_packages already tells you if sign-in is required.',
+        input_schema: {
+          type: 'object',
+          properties: { packageId: { type: 'string' }, packageName: { type: 'string' } },
+          required: ['packageId', 'packageName']
+        }
+      }
+    ];
+  }
+
+  const entryPointLabel = { booking: 'booking an appointment', gift_card: 'buying a gift card', package: 'buying a session package' }[entryPoint];
+
+  const systemPrompt = "You are a warm, efficient front-desk assistant for a wellness studio (Raaka Rituals), helping over chat the way a great in-person receptionist would - natural, unhurried, but quick to get to real information. " +
+    "This conversation is SPECIFICALLY for " + entryPointLabel + " — that is the only thing you help with here. If the person asks about something else this chat doesn't cover (e.g. they came here for a gift card but ask about booking, or vice versa), tell them warmly that you can help with that from the matching option on the page — close this chat and use that button instead — rather than trying to handle it in this conversation. Do not pivot to a different capability just because they ask; only tools for " + entryPointLabel + " are available to you here regardless. " +
     "Always use tools to get real data - NEVER invent a price, service name, availability, or time. If the client gives casual time language (like next week sometime, or after work), translate that into the days_ahead/preferred_days_of_week/preferred_time_of_day parameters for check_availability rather than asking them to restate it formally. " +
     "If get_client_history shows a returning client, use it naturally (e.g. Welcome back, same Deep Tissue session as last time with Amara, or something different today) rather than starting from zero. " +
-    "When you have real options to offer (like time slots), call present_options so they appear as tappable buttons - do not just list them in plain text. " +
-    "Keep your own messages short - a sentence or two, not paragraphs. Confirm the specific real details clearly before calling ready_to_book or ready_for_gift_card, and only call those once the client has clearly said yes to that specific thing. " +
+    "When you have real options to offer (like time slots or packages), call present_options so they appear as tappable buttons - do not just list them in plain text. " +
+    "Keep your own messages short - a sentence or two, not paragraphs. Confirm the specific real details clearly before calling any finalize tool, and only call one once the client has clearly said yes to that specific thing. " +
     "Today's date is " + (todayDateKey || 'unknown') + "." +
-    (isGuest ? " This person is NOT signed in — before calling ready_to_book or ready_for_gift_card, naturally collect their name, email, and (for booking only) phone number, the way a receptionist would ask for contact info from a new caller, not as a rigid form." : " This person is signed in, so their contact info is already on file — don't ask for it again.");
+    (isGuest ? " This person is NOT signed in — before finalizing, naturally collect their name, email, and (for booking only) phone number, the way a receptionist would ask for contact info from a new caller, not as a rigid form." : " This person is signed in, so their contact info is already on file — don't ask for it again.") +
+    " Once you understand what they're generally looking for, mention naturally that they can also browse/handle this manually themselves if they'd rather — a real manual option is always visible on their screen outside this chat, so you don't need to do anything else to offer it, just mention it exists in passing.";
 
   try {
     let conversationMessages = messages.map(m => ({ role: m.role, content: m.content }));
@@ -339,7 +391,7 @@ module.exports = async function handler(req, res) {
 
       if (!toolUseBlocks.length) break;
 
-      const finalizeCall = toolUseBlocks.find(b => b.name === 'ready_to_book' || b.name === 'ready_for_gift_card');
+      const finalizeCall = toolUseBlocks.find(b => b.name === 'ready_to_book' || b.name === 'ready_for_gift_card' || b.name === 'ready_to_purchase_package');
       if (finalizeCall) {
         finalResult = { type: finalizeCall.name, params: finalizeCall.input };
         break;
@@ -351,6 +403,7 @@ module.exports = async function handler(req, res) {
         let result;
         if (call.name === 'get_services') result = await toolGetServices();
         else if (call.name === 'get_client_history') result = await toolGetClientHistory();
+        else if (call.name === 'get_packages') result = await toolGetPackages();
         else if (call.name === 'check_availability') result = await toolCheckAvailability(call.input || {});
         else if (call.name === 'present_options') { quickReplies = call.input.options || []; result = { shown: true }; }
         else result = { error: 'Unknown tool' };
