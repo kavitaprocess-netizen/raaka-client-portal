@@ -950,7 +950,7 @@
              fields (amount picker, etc.) the person already resolved
              a moment ago. "Edit details" swaps back to the full form
              if something needs changing. -->
-        <div id="guest-gc-quick-confirm" style="display:none;">
+        <div id="guest-gc-quick-confirm" style="display:none;max-width:360px;margin:0 auto;border:1px solid var(--border);border-radius:14px;padding:20px;background:var(--surface);box-shadow:0 2px 10px rgba(0,0,0,0.04);">
           <div style="background:var(--primary-lighter);border-radius:10px;padding:16px;margin-bottom:14px;">
             <div style="font-weight:600;font-size:16px;" id="guest-gc-quick-summary-amount">$100 gift card</div>
             <div style="font-size:13.5px;color:var(--text-secondary);margin-top:4px;" id="guest-gc-quick-summary-recipient"></div>
@@ -961,6 +961,7 @@
         </div>
 
         <div id="guest-gc-full-form-fields">
+        <a href="#" id="guest-gc-cancel-edit-link" style="display:none;font-size:13px;color:var(--text-secondary);margin-bottom:10px;" onclick="document.getElementById('guest-gc-full-form-fields').style.display='none';document.getElementById('guest-gc-quick-confirm').style.display='block';return false;">← Back to confirmation</a>
         <div class="giftcard-amount-row">
           <button class="giftcard-amount-btn" onclick="selectGuestGiftCardAmount(50, this)">$50</button>
           <button class="giftcard-amount-btn" onclick="selectGuestGiftCardAmount(100, this)">$100</button>
@@ -1019,7 +1020,7 @@
           <!-- Same condensed view as the guest form — just the decided
                choice when arriving from a settled chat conversation,
                not the full amount-picker form. -->
-          <div id="giftcard-quick-confirm" style="display:none;">
+          <div id="giftcard-quick-confirm" style="display:none;max-width:360px;margin:0 auto;border:1px solid var(--border);border-radius:14px;padding:20px;background:var(--surface);box-shadow:0 2px 10px rgba(0,0,0,0.04);">
             <div style="background:var(--primary-lighter);border-radius:10px;padding:16px;margin-bottom:14px;">
               <div style="font-weight:600;font-size:16px;" id="giftcard-quick-summary-amount">$100 gift card</div>
               <div style="font-size:13.5px;color:var(--text-secondary);margin-top:4px;" id="giftcard-quick-summary-recipient"></div>
@@ -1029,6 +1030,7 @@
           </div>
 
           <div id="giftcard-full-form-fields">
+          <a href="#" id="giftcard-cancel-edit-link" style="display:none;font-size:13px;color:var(--text-secondary);margin-bottom:10px;" onclick="document.getElementById('giftcard-full-form-fields').style.display='none';document.getElementById('giftcard-quick-confirm').style.display='block';return false;">← Back to confirmation</a>
           <div class="giftcard-amount-row" id="giftcard-amount-row">
             <button class="giftcard-amount-btn" data-amount="25" onclick="selectGiftCardAmount(25)">$25</button>
             <button class="giftcard-amount-btn" data-amount="50" onclick="selectGiftCardAmount(50)">$50</button>
@@ -2468,6 +2470,12 @@ function revealManualGiftCardPurchase() {
   const signedInQuick = document.getElementById('giftcard-quick-confirm');
   if (signedInFull) signedInFull.style.display = 'block';
   if (signedInQuick) signedInQuick.style.display = 'none';
+  // Nothing to cancel back to on a fresh manual entry — only the chat
+  // handoff path re-shows these right after calling this function.
+  const guestCancelLink = document.getElementById('guest-gc-cancel-edit-link');
+  const signedInCancelLink = document.getElementById('giftcard-cancel-edit-link');
+  if (guestCancelLink) guestCancelLink.style.display = 'none';
+  if (signedInCancelLink) signedInCancelLink.style.display = 'none';
 }
 
 async function openChatAssistant(mode, skipOpener) {
@@ -2613,6 +2621,21 @@ async function sendChatAssistantMessage(presetText) {
       wrap.scrollTop = wrap.scrollHeight;
     }
 
+    if (result.mentionManualOption) {
+      const wrap = document.getElementById('chat-assistant-transcript');
+      const linkEl = document.createElement('a');
+      linkEl.href = '#';
+      const linkLabels = { booking: '→ Browse the calendar yourself instead', gift_card: '→ Buy manually instead', package: '→ See packages manually instead' };
+      linkEl.textContent = linkLabels[chatAssistantMode] || '→ Do this manually instead';
+      linkEl.style.cssText = 'align-self:flex-start;color:var(--primary);font-size:14px;font-weight:600;';
+      // Reuses closeChatAssistant's own mode-aware destination + reveal
+      // logic directly, rather than duplicating that same branching
+      // here a second time.
+      linkEl.onclick = (e) => { e.preventDefault(); closeChatAssistant(); };
+      wrap.appendChild(linkEl);
+      wrap.scrollTop = wrap.scrollHeight;
+    }
+
     if (result.finalResult) {
       await handleChatAssistantFinalResult(result.finalResult);
     }
@@ -2679,6 +2702,7 @@ async function handleChatAssistantFinalResult(finalResult) {
       document.getElementById('giftcard-quick-summary-recipient').textContent = recipientName ? `For ${recipientName}` : 'For yourself';
       document.getElementById('giftcard-full-form-fields').style.display = 'none';
       document.getElementById('giftcard-quick-confirm').style.display = 'block';
+      document.getElementById('giftcard-cancel-edit-link').style.display = 'block';
     } else {
       // Guest gift card purchase needs the BUYER's own name/email (no
       // account to pull it from) — the conversation collects this
@@ -2699,6 +2723,7 @@ async function handleChatAssistantFinalResult(finalResult) {
       document.getElementById('guest-gc-quick-summary-purchaser').textContent = purchaserName && purchaserEmail ? `From ${purchaserName} (${purchaserEmail})` : '';
       document.getElementById('guest-gc-full-form-fields').style.display = 'none';
       document.getElementById('guest-gc-quick-confirm').style.display = 'block';
+      document.getElementById('guest-gc-cancel-edit-link').style.display = 'block';
     }
   } else if (finalResult.type === 'ready_to_purchase_package') {
     // Payment method choice (real card on file vs. redeeming a gift
@@ -3914,7 +3939,7 @@ let realPackages = [];
 async function loadRealPackages() {
   const tenantIdForQuery = pilotProfile ? pilotProfile.tenant_id : RAAKA_TENANT_ID;
   const { data, error } = await pilotClient.from('packages')
-    .select('*').eq('tenant_id', tenantIdForQuery).eq('active', true);
+    .select('*, services(name, price)').eq('tenant_id', tenantIdForQuery).eq('active', true);
   if (error) { console.error('Could not load real packages:', error); return; }
   realPackages = data || [];
 }
@@ -3975,11 +4000,21 @@ async function renderPackages() {
     document.getElementById('balance-display').textContent = clientData.balance.sessions + ' session' + (clientData.balance.sessions === 1 ? '' : 's');
     document.getElementById('balance-detail').textContent = `${clientData.balance.packageName} · expires ${clientData.balance.expires}`;
   }
-  const packagesToShow = realPackages.map(p => ({
-    id: p.id, name: p.name, price: p.price,
-    value: `${p.sessions_included} session${p.sessions_included === 1 ? '' : 's'}${p.description ? ' · ' + p.description : ''}`,
-    featured: false, isReal: true
-  }));
+  const packagesToShow = realPackages.map(p => {
+    const perSession = (p.price / p.sessions_included).toFixed(2);
+    const refService = p.services;
+    let valueLine = `${p.sessions_included} session${p.sessions_included === 1 ? '' : 's'} — $${perSession}/session`;
+    let hasRealSavings = false;
+    if (refService) {
+      const individualTotal = refService.price * p.sessions_included;
+      const savings = individualTotal - p.price;
+      if (savings > 0) {
+        valueLine = `$${perSession}/session — save $${savings.toFixed(2)} vs. booking ${refService.name} individually`;
+        hasRealSavings = true;
+      }
+    }
+    return { id: p.id, name: p.name, price: p.price, value: valueLine, featured: hasRealSavings, isReal: true };
+  });
   document.getElementById('package-options').innerHTML = packagesToShow.length ? packagesToShow.map(p => `
     <div class="package-card ${p.featured ? 'featured' : ''}">
       ${!p.isReal ? `<span class="remove-option-link" onclick="removePackage('${p.id}')">\u2715</span>` : ''}
