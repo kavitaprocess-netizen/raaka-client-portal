@@ -660,6 +660,10 @@
               <div id="guest-existing-book-error" class="giftcard-error" style="margin-top:8px;"></div>
             </div>
           </div>
+          <div id="guest-identity-quick-confirm" style="display:none;background:var(--primary-lighter);border-radius:10px;padding:14px 16px;margin-bottom:14px;">
+            <div style="font-size:13.5px;" id="guest-identity-summary-line"></div>
+            <a href="#" style="display:inline-block;font-size:12.5px;color:var(--primary);margin-top:6px;" onclick="document.getElementById('guest-identity-quick-confirm').style.display='none';document.getElementById('guest-form-fields').style.display='block';return false;">Edit details</a>
+          </div>
           <div id="guest-form-fields">
             <div class="form-field">
               <label class="form-label">Full name</label>
@@ -693,6 +697,7 @@
               <label class="form-label">Who referred you? (optional)</label>
               <input type="text" class="form-input" id="guest-referred-by-name" placeholder="Their name">
             </div>
+          </div>
             <div id="guest-payment-method-section">
               <label class="form-label" style="margin-top:14px;display:block;">How would you like to pay?</label>
               <div class="panel-sub" style="margin-bottom:10px;">Nothing is charged now — this is settled once your session is complete.</div>
@@ -719,7 +724,6 @@
                 <span>Pay now (online) — <em>coming soon</em></span>
               </label>
             </div>
-          </div>
         </div>
         <div id="real-payment-section" style="display:none;">
           <div class="giftcard-error" id="real-payment-error"></div>
@@ -2450,6 +2454,15 @@ let chatAssistantMessages = [];
 function revealManualBooking() {
   document.getElementById('book-manual-wrap').style.display = 'block';
   document.getElementById('book-manual-toggle').style.display = 'none';
+  // Default to the full identity form — someone using the manual
+  // toggle directly hasn't discussed anything in chat yet, so there's
+  // no "already collected" info to condense. The chat handoff path
+  // calls this too, but immediately switches back to the condensed
+  // summary right after, so this default never actually shows there.
+  const identityFull = document.getElementById('guest-form-fields');
+  const identityQuick = document.getElementById('guest-identity-quick-confirm');
+  if (identityFull) identityFull.style.display = 'block';
+  if (identityQuick) identityQuick.style.display = 'none';
 }
 
 function revealManualGiftCardPurchase() {
@@ -2680,6 +2693,16 @@ async function handleChatAssistantFinalResult(finalResult) {
       if (nameEl && guestName) nameEl.value = guestName;
       if (emailEl && guestEmail) emailEl.value = guestEmail;
       if (phoneEl && guestPhone) phoneEl.value = guestPhone;
+
+      // Identity info is already collected — condensed to one line with
+      // an Edit link, same principle as gift cards. Payment method
+      // stays fully visible below this regardless, since that's a real
+      // decision the conversation never actually asked about.
+      if (guestName && guestEmail) {
+        document.getElementById('guest-identity-summary-line').textContent = `Booking as ${guestName} (${guestEmail})`;
+        document.getElementById('guest-form-fields').style.display = 'none';
+        document.getElementById('guest-identity-quick-confirm').style.display = 'block';
+      }
     }
   } else if (finalResult.type === 'ready_for_gift_card') {
     const { amount, recipientName, recipientEmail, purchaserName, purchaserEmail } = finalResult.params;
@@ -3211,9 +3234,10 @@ function renderCardOnFile() {
   // card-on-file capability to be honest; a look-alike field risks
   // someone typing their actual card number into something that does
   // nothing safe with it, which we explicitly agreed never to build.
-  if (isRealBooking) { box.innerHTML = ''; return; }
-  if (bookingState.isReschedule || bookingState.service.isGroupClass) { box.innerHTML = ''; return; }
-  if (!BUSINESS_SETTINGS.requireCardOnFile) { box.innerHTML = ''; return; }
+  if (isRealBooking) { box.innerHTML = ''; box.style.display = 'none'; return; }
+  if (bookingState.isReschedule || bookingState.service.isGroupClass) { box.innerHTML = ''; box.style.display = 'none'; return; }
+  if (!BUSINESS_SETTINGS.requireCardOnFile) { box.innerHTML = ''; box.style.display = 'none'; return; }
+  box.style.display = 'block';
   box.innerHTML = `
     <div class="card-on-file-title">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
