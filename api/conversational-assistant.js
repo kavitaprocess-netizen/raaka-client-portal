@@ -279,10 +279,10 @@ module.exports = async function handler(req, res) {
 
   const presentOptionsTool = {
     name: 'present_options',
-    description: 'Show the client a short list of clickable choices (e.g. real time slots, or a yes/no) instead of making them type. Use this whenever you have a short real list to offer, or whenever a simple choice would be faster than typing.',
+    description: 'Show the client a short list of clickable choices instead of making them type. Use this whenever you have a short real list to offer, or whenever a simple choice would be faster than typing. IMPORTANT: for appointment times, ALWAYS include the full date with every single option, even if the conversation has already narrowed down to one specific day — never a bare time-only label like "9:00 AM" on its own, always "Thu Sep 18, 9:00 AM" style, so it is unambiguous at a glance which day each option is actually for.',
     input_schema: {
       type: 'object',
-      properties: { options: { type: 'array', items: { type: 'string' }, description: 'Short button labels, e.g. ["Tue Sep 16, 2:00 PM", "Thu Sep 18, 10:00 AM"]' } },
+      properties: { options: { type: 'array', items: { type: 'string' }, description: 'Short button labels. For appointment times: "Tue Sep 16, 2:00 PM" style always, date AND time together, never time alone.' } },
       required: ['options']
     }
   };

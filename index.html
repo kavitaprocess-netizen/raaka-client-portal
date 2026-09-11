@@ -2285,7 +2285,7 @@ let chatVoiceRecognition = null;
 async function startHomeConcierge(useVoiceFirst) {
   const heroInput = document.getElementById('home-hero-input');
   const text = heroInput.value.trim();
-  await openChatAssistant('home');
+  await openChatAssistant('home', !useVoiceFirst && !!text);
   if (useVoiceFirst) {
     toggleChatVoiceInput();
   } else if (text) {
@@ -2379,7 +2379,7 @@ function revealManualGiftCardPurchase() {
   document.getElementById('giftcard-manual-toggle').style.display = 'none';
 }
 
-async function openChatAssistant(mode) {
+async function openChatAssistant(mode, skipOpener) {
   chatAssistantMode = mode;
   chatAssistantMessages = [];
   const titles = { gift_card: 'Let\'s get you a gift card', package: 'Let\'s find you a package', booking: 'Let\'s find you a time', home: 'How can we help?' };
@@ -2389,9 +2389,15 @@ async function openChatAssistant(mode) {
   document.getElementById('chat-assistant-error').classList.remove('show');
   showChatAssistantInput();
   goTo('chat-assistant');
-  const opener = "Hi! How can I help?";
-  appendChatBubble('assistant', opener);
-  chatAssistantMessages.push({ role: 'assistant', content: opener });
+  // Skipped when arriving with something already typed (e.g. from the
+  // Home hero) — the title already reads "How can we help?", so a
+  // near-identical "Hi! How can I help?" bubble right under it, right
+  // before their own message answers exactly that, just looked redundant.
+  if (!skipOpener) {
+    const opener = "Hi! How can I help?";
+    appendChatBubble('assistant', opener);
+    chatAssistantMessages.push({ role: 'assistant', content: opener });
+  }
 }
 
 function closeChatAssistant() {
@@ -2536,6 +2542,7 @@ async function handleChatAssistantFinalResult(finalResult) {
   } else if (finalResult.type === 'ready_for_gift_card') {
     const { amount, recipientName, recipientEmail, purchaserName, purchaserEmail } = finalResult.params;
     goTo('giftcards');
+    revealManualGiftCardPurchase();
     if (pilotProfile) {
       selectGiftCardAmount(null);
       const customInput = document.getElementById('giftcard-custom-amount');
